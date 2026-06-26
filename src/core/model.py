@@ -25,12 +25,16 @@ class model(ABC):
     
 
 
-class OpenAI(model):
-    def __init__(self, model_name, api_key):
+class OpenAIProvider(model):
+    def __init__(self, model_name, api_key, bu):
         super().__init__(model_name, api_key)
+        self.bu = bu
         import openai
+
+
         self.client = openai.OpenAI(
-            api_key=self.api_key or os.getenv("OPENAI_API_KEY")
+            base_url="http://localhost:1234/v1",
+            api_key=self.api_key or os.getenv("OPENAI_API_KEY"),
         )
     def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
             completion = self.client.chat.completions.create(
@@ -68,8 +72,10 @@ class Provider:
         self.url=url
         if provider == "Ollama":
             self.provider=Ollama(model_name, url)
+        if provider == "OpenAI":
+            self.provider=OpenAIProvider(model_name, api_key, url)
     def chat(self, prompt: str, **kwargs):
-        return self.provider.chat(prompt, kwargs)
+        return self.provider.chat(prompt, **kwargs)
     def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
         return self.provider.chat_with_history(messages, **kwargs)
     def create_session(self, system_prompt):
@@ -89,6 +95,8 @@ class ChatSession:
         response = self.provider.chat_with_history(self.history, **kwargs)
         self.history.append({"role": "assistant", "content": response})
         return response
+    
+
 
 
 

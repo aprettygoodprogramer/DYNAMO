@@ -89,7 +89,8 @@ class DYNAMO:
                         final_output = final_draft
                 else:
                         print("[SYSTEM] Score below 80%. Passing feedback to Manager for retries...")
-                        self.manager.ask(f"The draft failed with {score}%. Feedback: {feedback}. Adjust sub-agent instructions.")
+                        feedback = self.manager.ask(f"The draft failed with {score}%. Feedback: {feedback}. Adjust sub-agent instructions.")
+                        spwan_agents=self.load_json(feedback).get("agents", [])
             
         print("\n================ FINAL RESULT ================\n")
         print(final_output)
