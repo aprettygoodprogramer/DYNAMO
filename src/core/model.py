@@ -58,5 +58,20 @@ class Ollama(model):
         response = requests.post(self.api_url, json=payload)
         response.raise_for_status()
         return response.json()["message"]["content"]
+    
+
+class Provider:
+    def __init__(self, model_name, provider, api_key, url: Optional[str] = None):
+        self.model_name = model_name
+        self.provider = provider
+        self.api_key = api_key
+        self.url=url
+        if provider == "Ollama":
+            self.provider=Ollama(model_name, url)
+    def chat(self, prompt: str, **kwargs):
+        return self.provider.chat(prompt, kwargs)
+    def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
+        return self.provider.chat_with_history(messages, **kwargs)
+
 
         

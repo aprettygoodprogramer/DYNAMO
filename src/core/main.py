@@ -1,11 +1,11 @@
-from model import Ollama
+from model import Ollama, Provider
 def main():
     history = [
         {"role": "system", "content": "You are a AI helper"},
         {"role": "user", "content": "Yo whats up man!"}
     ]
-    ollam_test = Ollama("gemma4:e2b", "http://localhost:11434/api/chat")    
-    print(ollam_test.chat_with_history(history))
+    test=Provider("gemma4:e2b", "Ollama", "", "http://localhost:11434/api/chat")
+    print(test.chat_with_history(history))   
 
     
 
