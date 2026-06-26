@@ -42,3 +42,22 @@ class OpenAI(model):
          )
             return completion.choices[0].message.content
     
+
+class Ollama(model):
+    def __init__(self, model_name, api_url):
+        super().__init__(model_name)
+        self.api_url=api_url
+    def chat_with_history( self, messages: List[Dict[str, str]], **kwargs):
+        payload = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {
+                        "temperature": kwargs.get("temperature", 0.7),
+                    },
+                }
+        response = requests.post(self.api_url, json=payload)
+        response.raise_for_status()
+        return response.json()["message"]["content"]
+
+        
