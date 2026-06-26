@@ -32,13 +32,12 @@ class OpenAI(model):
         self.client = openai.OpenAI(
             api_key=self.api_key or os.getenv("OPENAI_API_KEY")
         )
-        def chat_with_history(self, sys_prompt, messages: List[Dict[str, str]], **kwargs):
+    def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
             completion = self.client.chat.completions.create(
              model=self.model_name,
-             messages=[
-                 {"role": "system", "content": "You are a helpful assistant."},
-                 {"role": "user", "content": "Explain quantum computing in one sentence."}
-             ]
+             messages=messages,
+            **kwargs
+
          )
             return completion.choices[0].message.content
     
