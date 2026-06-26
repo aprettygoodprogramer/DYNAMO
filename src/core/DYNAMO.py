@@ -1,6 +1,7 @@
 from agent import Agent
 import json
 import re
+import time
 class DYNAMO:
     def __init__(self, provider, critique, goal):
         self.provider = provider
@@ -26,7 +27,7 @@ class DYNAMO:
             "Manager Agent",
             provider,
             system_prompt=(
-                f"""You are the manager agent. You manage the execution of a specific plan created by the planning agent. Given a plan for sub-agents, determine the specific prompts and roles for each sub-agent. The overall goal is: {self.goal}. Output your sub-agent definitions STRICTLY as JSON with no extra text, using this format: {{"agents": [{{"name": "Agent 1", "role_prompt": "...", "task": "..."}}]}}"""
+                f"""You are the manager agent. You manage the execution of a specific plan created by the planning agent. Given a plan for sub-agents, determine the specific prompts and roles for each sub-agent. The overall goal is: {self.goal}. Don't forget to metion a breif summary of the overal goal to the agents so they get a summary. Output your sub-agent definitions STRICTLY as JSON with no extra text, using this format: {{"agents": [{{"name": "Agent 1", "role_prompt": "...", "task": "..."}}]}}"""
             )
         )
 
@@ -34,7 +35,7 @@ class DYNAMO:
             "Work Critique Agent",
             provider,
             system_prompt=(
-                f"""You are the final critique agent. Review the combined output of all sub-agents and their individual outputs. The sub-agents are trying to achieve the following goal: {self.goal}. Critique each sub-agent's performance and quality, and note any oversights. Provide an overall score out of 100, where a score above 80 is considered passing. Respond with ONLY valid JSON, using this format: {{"feedback": "your detailed feedback here", "score": 85}}"""
+                f"""You are the final critique agent. Review the combined output of all sub-agents and their individual outputs. The sub-agents are trying to achieve the following goal: {self.goal}. Critique each sub-agent's performance and quality, and note any oversights. Provide an overall score out of 100, where a score above 80 is considered passing. Grade based on the rubric provided. Do not go easy, be harsh. Respond with ONLY valid JSON, using this format: {{"feedback": "your detailed feedback here", "score": 85}}"""
             )
         )
 
@@ -43,6 +44,13 @@ class DYNAMO:
             provider,
             system_prompt=(
                 f"""You are the synthesis agent. Your goal is to assemble the final output from all sub-agents. The sub-agents are trying to achieve the following goal: {self.goal}. Combine all of the sub-agents' work into a single, coherent final result."""
+            )
+        )
+        self.rubric = Agent(
+            "Synth Agent",
+            provider,
+            system_prompt=(
+                f"""Your goal is to create a rubric based in the input provided. The input will be a plan created to complete {self.goal}. You're creating a rubric for the sub agents the plan is creating. If it is a programming task, make sure it has certain elements for exmaple."""
             )
         )
         
@@ -59,7 +67,11 @@ class DYNAMO:
                 break
             current_plan = self.planner.ask(f"Based on this feedback, generate a better plan. {plan_critique_hand_back}")
             print(current_plan)
+
+
+        grading_rubric=self.rubric.ask(f"Here is the plan you have to create a rubic for. ")
         plan_json = self.manager.ask(f"Here is the approved plan: {current_plan}. Define the sub-agents and their tasks. Turn this into JSON please.")
+
         spwan_agents=self.load_json(plan_json).get("agents", [])
 
 
@@ -73,11 +85,12 @@ class DYNAMO:
                 for i in spwan_agents:
                     worker = Agent(i["name"], self.provider, i["role_prompt"])
                     result = worker.ask(f"Task: {i['task']}. Here is the output from other agents: {sub_agent_results} (If there's none your the first agent.)")
+                    
                     sub_agent_results.append(f"--- Output from {i['name']} ---\n{result}")
                 final_draft = self.synth.ask(f"Compile these results into a single final result. {sub_agent_results}")
                 print(f"FINAL DRAFT BEFORE CRITIQUE: {final_draft} ")
 
-                critique = self.work_critique.ask(f"Critique the agents, and the final output. Sub agent results: {sub_agent_results}, final result: {final_draft}")
+                critique = self.work_critique.ask(f"Critique the agents, and the final output. This is the rubric {grading_rubric} Sub agent results: {sub_agent_results}, final result: {final_draft}")
                 critique_data = self.load_json(critique)   
                 score = critique_data.get("score", 0)
                 feedback = critique_data.get("feedback", "No feedback provided.")
