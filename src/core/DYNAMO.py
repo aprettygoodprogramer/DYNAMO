@@ -1,5 +1,6 @@
 from agent import Agent
-
+import json
+import re
 class DYNAMO:
     def __init__(self, provider, critique, goal):
         self.provider = provider
@@ -48,7 +49,81 @@ class DYNAMO:
 
         
     def run(self):
+        current_plan = self.planner.ask(f"Create the initial plan for our goal.")
+        print(current_plan)
+        for _ in range(3):
+            plan_critique_hand_back = self.plan_critique.ask(f"Critique this plan. Find any flaws: {current_plan}")
+            print(plan_critique_hand_back)
 
-        None
-    
+            if "APPROVED" in plan_critique_hand_back:
+                break
+            current_plan = self.planner.ask(f"Based on this feedback, generate a better plan. {plan_critique_hand_back}")
+            print(current_plan)
+        plan_json = self.manager.ask(f"Here is the approved plan: {current_plan}. Define the sub-agents and their tasks. Turn this into JSON please.")
+        spwan_agents=self.load_json(plan_json).get("agents", [])
+
+
+        passing_grade = False
+        final_output = ""
+        iterations = 0
+
+        while not passing_grade and iterations<self.critique:
+                iterations += 1
+                sub_agent_results = []
+                for i in spwan_agents:
+                    worker = Agent(i["name"], self.provider, i["role_prompt"])
+                    result = worker.ask(f"Task: {i['task']}. Here is the output from other agents: {sub_agent_results} (If there's none your the first agent.)")
+                    sub_agent_results.append(f"--- Output from {i['name']} ---\n{result}")
+                final_draft = self.synth.ask(f"Compile these results into a single final result. {sub_agent_results}")
+                print(f"FINAL DRAFT BEFORE CRITIQUE: {final_draft} ")
+
+                critique = self.work_critique.ask(f"Critique the agents, and the final output. Sub agent results: {sub_agent_results}, final result: {final_draft}")
+                critique_data = self.load_json(critique)   
+                score = critique_data.get("score", 0)
+                feedback = critique_data.get("feedback", "No feedback provided.")
+                    
+                print(f"\n[SYSTEM] Current Score: {score}%")
+                    
+                if score >= 80:
+                        passing_grade = True
+                        final_output = final_draft
+                else:
+                        print("[SYSTEM] Score below 80%. Passing feedback to Manager for retries...")
+                        self.manager.ask(f"The draft failed with {score}%. Feedback: {feedback}. Adjust sub-agent instructions.")
+            
+        print("\n================ FINAL RESULT ================\n")
+        print(final_output)
+        print(final_draft)
+        return final_output
+
+
+
+
+
+    def load_json(self, text):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0).strip())
+            except json.JSONDecodeError:
+                pass
+
+        print(f"Warning: All JSON parsing attempts failed. Raw text:\n{text[:500]}")
+        return {}
+        
+
+                
+            
 

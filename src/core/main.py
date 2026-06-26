@@ -1,11 +1,13 @@
 from model import Ollama, Provider
+from DYNAMO import DYNAMO
 def main():
-    history = [
-        {"role": "system", "content": "You are a AI helper"},
-        {"role": "user", "content": "Yo whats up man!"}
-    ]
+
     test=Provider("gemma4:e2b", "Ollama", "", "http://localhost:11434/api/chat")
-    print(test.chat_with_history(history))   
+    v1=DYNAMO(test, 2, "Write a well reaserched essay about Linux and Linus Torvalds.")
+    v1.run()
+
+
+    
 
     
 
