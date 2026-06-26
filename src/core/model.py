@@ -72,6 +72,24 @@ class Provider:
         return self.provider.chat(prompt, kwargs)
     def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
         return self.provider.chat_with_history(messages, **kwargs)
+    def create_session(self, system_prompt):
+        return ChatSession(self.provider, system_prompt)
+
+    
+
+class ChatSession:
+    def __init__(self, provider: Provider, system_prompt: Optional[str] = None):
+        self.provider = provider
+        self.history: List[Dict[str, str]] = []
+        if system_prompt:
+            self.history.append({"role": "system", "content": system_prompt})
+
+    def send_message(self, prompt: str, **kwargs) -> str:
+        self.history.append({"role": "user", "content": prompt})
+        response = self.provider.chat_with_history(self.history, **kwargs)
+        self.history.append({"role": "assistant", "content": response})
+        return response
+
 
 
         
