@@ -3,10 +3,12 @@ import json
 import re
 import time
 class DYNAMO:
-    def __init__(self, provider, critique, goal):
+    def __init__(self, provider, critique, goal, tools=None, tool_executor=None):
         self.provider = provider
         self.critique = critique
         self.goal=goal
+        self.tools = tools
+        self.tool_executor = tool_executor
         self.planner = Agent(
             "Planning Agent", 
             provider, 
@@ -19,7 +21,7 @@ class DYNAMO:
             "Plan Critique Agent",
             provider,
             system_prompt=(
-                f"""You critique the plans of the planning agent. The planning agent is creating a plan for sub-agents in order to complete the following goal: {self.goal}. Review the plan and provide constructive feedback. If the plan is sufficient, end your review with the exact phrase "APPROVED"."""
+                f"""You critique the plans of the planning agent. The planning agent is creating a plan for sub-agents in order to complete the following goal: {self.goal}. Review the plan and provide constructive feedback. If the plan is sufficient, end your review with the exact phrase "APPROVED". Critical: A synth agent is automatically added, do not critique if it does not exist. Critical"""
             )
         )
 
@@ -90,7 +92,8 @@ class DYNAMO:
                 iterations += 1
                 sub_agent_results = []
                 for i in spwan_agents:
-                    worker = Agent(i["name"], self.provider, i["role_prompt"])
+                    worker = Agent(i["name"], self.provider, i["role_prompt"], 
+               tools=self.tools, tool_executor=self.tool_executor)
                     result = worker.ask(f"Task: {i['task']}. Here is the output from other agents: {sub_agent_results} (If there's none your the first agent.)")
                     time.sleep(5)
 
