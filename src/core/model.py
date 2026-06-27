@@ -33,7 +33,7 @@ class OpenAIProvider(model):
 
 
         self.client = openai.OpenAI(
-            base_url="http://localhost:1234/v1",
+            base_url=self.bu,
             api_key=self.api_key or os.getenv("OPENAI_API_KEY"),
         )
     def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
@@ -76,7 +76,9 @@ class Provider:
             self.provider=OpenAIProvider(model_name, api_key, url)
     def chat(self, prompt: str, **kwargs):
         return self.provider.chat(prompt, **kwargs)
-    def chat_with_history(self, messages: List[Dict[str, str]], **kwargs):
+    def chat_with_history(self, messages, **kwargs):
+        if self.reasoning:
+            kwargs.setdefault("reasoning", {"effort": "high"})
         return self.provider.chat_with_history(messages, **kwargs)
     def create_session(self, system_prompt):
         return ChatSession(self.provider, system_prompt)

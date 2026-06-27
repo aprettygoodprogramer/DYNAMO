@@ -1,17 +1,15 @@
 from model import Ollama, Provider
 from DYNAMO import DYNAMO
+from dotenv import load_dotenv
+
 def main():
+    load_dotenv()
 
-    test=Provider("google/gemma-4-e2b", "OpenAI", "lm-studio", "http://localhost:1234/v1")
-    v1=DYNAMO(test, 2, """Create a basic Minecraft-style voxel game in a single HTML file with:
+    test=Provider("deepseek/deepseek-v4-flash", "OpenAI", False, "https://openrouter.ai/api/v1")
+    v1=DYNAMO(test, 2, """Make me a cohesive plan to get me (The user) to become rich. I will paste this plan back in and enable tool calling enabled. Budget of 100$. (tool calling means that agents can preform real world actions like searching the web, creating files, spending money, etc)""")
+    output = v1.run()
 
-- First-person 3D view with WASD movement and mouse look
-- Simple terrain generation (grass, dirt, stone blocks)
-- Ability to place and break blocks with mouse clicks
-- A 16x16x16 block world
 
-Use Three.js via CDN for 3D rendering.""")
-    v1.run()
 
 
     

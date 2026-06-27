@@ -11,7 +11,7 @@ class DYNAMO:
             "Planning Agent", 
             provider, 
             system_prompt=(
-                f"""You are the planning agent. Your goal is to take the following goal: {self.goal}, and create a plan for sub-agents. Outline what agents need to be created for the task to be completed. Break down the task into multiple smaller tasks that can be performed by individual agents. For a programming example, you could have an agent that writes a specific part of the code, and another agent that critiques it. All you need to do is describe each agent and their role."""
+                f"""You are the planning agent. Your goal is to take the following goal: {self.goal}, and create a plan for AI sub-agents. Outline what agents need to be created for the task to be completed. Break down the task into multiple smaller tasks that can be performed by individual agents. For a programming example, you could have an agent that writes a specific part of the code, and another agent that critiques it. All you need to do is describe each agent and their role. The sub agents run sequentially, with their output being passed to the next agent. There should be no needed humans in the loop. Create the users goal fully autonomously. You don't need an agent to put all your work together, an agent will automatically do that by combinging all the sub agents outputs. """
             )
         )
 
@@ -59,18 +59,25 @@ class DYNAMO:
     def run(self):
         current_plan = self.planner.ask(f"Create the initial plan for our goal.")
         print(current_plan)
+        time.sleep(10)
         for _ in range(3):
             plan_critique_hand_back = self.plan_critique.ask(f"Critique this plan. Find any flaws: {current_plan}")
+            time.sleep(10)
+
             print(plan_critique_hand_back)
 
             if "APPROVED" in plan_critique_hand_back:
                 break
             current_plan = self.planner.ask(f"Based on this feedback, generate a better plan. {plan_critique_hand_back}")
+            time.sleep(10)
+
             print(current_plan)
 
 
-        grading_rubric=self.rubric.ask(f"Here is the plan you have to create a rubic for. ")
+        grading_rubric=self.rubric.ask(f"Here is the plan you have to create a rubic for. {current_plan}")
         plan_json = self.manager.ask(f"Here is the approved plan: {current_plan}. Define the sub-agents and their tasks. Turn this into JSON please.")
+        time.sleep(10)
+
 
         spwan_agents=self.load_json(plan_json).get("agents", [])
 
@@ -85,12 +92,17 @@ class DYNAMO:
                 for i in spwan_agents:
                     worker = Agent(i["name"], self.provider, i["role_prompt"])
                     result = worker.ask(f"Task: {i['task']}. Here is the output from other agents: {sub_agent_results} (If there's none your the first agent.)")
-                    
+                    time.sleep(5)
+
                     sub_agent_results.append(f"--- Output from {i['name']} ---\n{result}")
                 final_draft = self.synth.ask(f"Compile these results into a single final result. {sub_agent_results}")
+                time.sleep(10)
+
                 print(f"FINAL DRAFT BEFORE CRITIQUE: {final_draft} ")
 
                 critique = self.work_critique.ask(f"Critique the agents, and the final output. This is the rubric {grading_rubric} Sub agent results: {sub_agent_results}, final result: {final_draft}")
+                time.sleep(10)
+
                 critique_data = self.load_json(critique)   
                 score = critique_data.get("score", 0)
                 feedback = critique_data.get("feedback", "No feedback provided.")
@@ -102,7 +114,9 @@ class DYNAMO:
                         final_output = final_draft
                 else:
                         print("[SYSTEM] Score below 80%. Passing feedback to Manager for retries...")
-                        feedback = self.manager.ask(f"The draft failed with {score}%. Feedback: {feedback}. Adjust sub-agent instructions.")
+                        feedback = self.manager.ask(f"The Draft was uncessful. Feedback: {critique}. Adjust sub-agent instructions.")
+                        time.sleep(10)
+
                         spwan_agents=self.load_json(feedback).get("agents", [])
             
         print("\n================ FINAL RESULT ================\n")
