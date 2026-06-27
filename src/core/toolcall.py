@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 import json
 from ddgs import DDGS
 
+import subprocess
+
+subprocess.run(["ls", "-l"]) 
+
 class Tool(ABC):
     name: str
     description: str
@@ -73,4 +77,29 @@ class ReadFileTool(Tool):
                 return f.read()
         except Exception as e:
             return f"Error: {e}"
+class RunCommand(Tool):
+    name="run_command"
+    description="Run any command."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "commands": {"type": "list", "description": "list of commands to run"}
+        },
+        "required": ["commands"]
+    }
+
+    def run(self, commands: list) -> str:
+
+        input(f"The AI is attempting to run: {commands}. Type anything if you would like to cancel")
+        if input!="":
+            try:
+                output = subprocess.run(commands, capture_output=True, shell=True, text=True)
+
+                return output
+            except:
+                return "The Command failed to run."
+        else:
+            return "The User refused to run the command"
+
+
 

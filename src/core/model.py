@@ -49,8 +49,7 @@ class OpenAIProvider(model):
             message = completion.choices[0].message
 
             if message.tool_calls:
-                # FIXED: Convert API object to dict and drop None values 
-                # (prevents OpenRouter 400 errors)
+
                 messages.append(message.model_dump(exclude_none=True))
                 
                 for tc in message.tool_calls:
@@ -60,7 +59,6 @@ class OpenAIProvider(model):
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
-                        # Adding name is good practice for the tool response
                         "name": tc.function.name, 
                         "content": str(result),
                     })
