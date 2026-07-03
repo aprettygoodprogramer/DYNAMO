@@ -53,7 +53,11 @@ class OpenAIProvider(model):
                 messages.append(message.model_dump(exclude_none=True))
                 
                 for tc in message.tool_calls:
-                    args = json.loads(tc.function.arguments)
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        print("[Warning] Model returned invalid JSON for tool call. Retrying...")
+                        args = {} 
                     result = tool_executor(tc.function.name, args)
                     
                     messages.append({
