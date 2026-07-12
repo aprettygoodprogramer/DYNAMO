@@ -5,6 +5,7 @@ import os
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable, Optional
 
 from ddgs import DDGS
 from playwright.sync_api import sync_playwright
@@ -114,6 +115,30 @@ class RunCommand(Tool):
         "required": ["commands"],
     }
 
+    def __init__(self, confirm: Optional[Callable[[list[str]], bool]] = None):
+        """
+        confirm: optional callback that receives the command tokens and
+        returns True/False for whether to proceed. If not provided, falls
+        back to a blocking input() prompt on stdin (only safe for plain
+        CLI use — never pass None when running inside a GUI/TUI, since a
+        raw input() call will fight with the UI for control of the
+        terminal).
+        """
+        self.confirm = confirm
+
+    def _ask_permission(self, commands: list[str]) -> bool:
+        if self.confirm is not None:
+            try:
+                return bool(self.confirm(commands))
+            except Exception:
+                return False
+
+        user_choice = input(
+            f"The AI is attempting to run: {commands}. "
+            "Press Enter to proceed, or type anything to cancel: "
+        )
+        return user_choice == ""
+
     def _is_within(self, path: Path, root: Path) -> bool:
         try:
             path.relative_to(root)
@@ -172,17 +197,13 @@ class RunCommand(Tool):
         return argv, stdout_path, stdout_append, stderr_path, stderr_append
 
     def run(self, commands: list) -> str:
-        user_choice = input(
-            f"The AI is attempting to run: {commands}. "
-            "Press Enter to proceed, or type anything to cancel: "
-        )
-        if user_choice != "":
-            return "The User refused to run the command"
-
         if not isinstance(commands, list) or not all(
             isinstance(x, str) for x in commands
         ):
             return "Error: 'commands' must be a list of strings."
+
+        if not self._ask_permission(commands):
+            return "The User refused to run the command"
 
         try:
             argv, out_path, out_append, err_path, err_append = (
