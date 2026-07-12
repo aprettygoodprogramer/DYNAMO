@@ -46,6 +46,8 @@ class ToolRegistry:
         return [t.to_schema() for t in self.tools.values()]
 
 
+import time
+
 class WebSearchTool(Tool):
     name = "web_search"
     description = "Search the web for current information."
@@ -57,13 +59,24 @@ class WebSearchTool(Tool):
         "required": ["query"],
     }
 
-    def run(self, query: str) -> str:
-        with DDGS() as ddg:
-            results = ddg.text(query, max_results=5)
-        return "\n\n".join(
-            f"Title: {r['title']}\nURL: {r['href']}\nSummary: {r['body']}"
-            for r in results
-        )
+    def run(self, query: str, retries: int = 3, delay: float = 3.0) -> str:
+        last_error = None
+        for attempt in range(1, retries + 1):
+            try:
+                with DDGS() as ddg:
+                    results = ddg.text(query, max_results=5)
+                if not results:
+                    return "No results found."
+                return "\n\n".join(
+                    f"Title: {r['title']}\nURL: {r['href']}\nSummary: {r['body']}"
+                    for r in results
+                )
+            except Exception as e:
+                last_error = e
+                print(f"[WebSearchTool] Attempt {attempt}/{retries} failed: {e}")
+                if attempt < retries:
+                    time.sleep(delay)
+        return f"Search failed after {retries} attempts: {last_error}"
 
 
 class ReadFileTool(Tool):

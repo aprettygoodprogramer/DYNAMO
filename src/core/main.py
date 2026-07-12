@@ -10,8 +10,9 @@ def main():
     registry.register(ReadFileTool())
     registry.register(ScreenshotTool())
     #registry.register(RunCommand())
-    test=Provider("deepseek/deepseek-v4-flash", "OpenAI", False, "https://openrouter.ai/api/v1")
-    v1=DYNAMO(test, 2, """Reaserch ALL the AI news in the past week. It is currently July 3rd 2026. ONLT USE INFORMATION FROM THE WEB. Your training data is outdated.""",     tools=registry.get_schemas(),
+    #test=Provider("deepseek/deepseek-v4-flash", "OpenAI", False, "https://openrouter.ai/api/v1")
+    test=Provider("google/gemma-4-e2b", "OpenAI", False, "http://localhost:1234/v1")
+    v1=DYNAMO(test, 2, """Give me all the AI news from the past week. It is currently July 4th 2026 (Your training data is outdated, therefore your date is outdated.) ONLY USE KNOWLEDGE FROM THE INTERNET, DO NOT USE ANYTHING ELSE.""",     tools=registry.get_schemas(),
     tool_executor=registry.execute)
     output = v1.run()
 
