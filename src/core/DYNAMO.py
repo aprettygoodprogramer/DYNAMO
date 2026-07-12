@@ -3,10 +3,12 @@ import json
 import re
 import time
 class DYNAMO:
-    def __init__(self, provider, critique, goal):
+    def __init__(self, provider, critique, goal, tools=None, tool_executor=None):
         self.provider = provider
         self.critique = critique
         self.goal=goal
+        self.tools = tools
+        self.tool_executor = tool_executor
         self.planner = Agent(
             "Planning Agent", 
             provider, 
@@ -19,7 +21,7 @@ class DYNAMO:
             "Plan Critique Agent",
             provider,
             system_prompt=(
-                f"""You critique the plans of the planning agent. The planning agent is creating a plan for sub-agents in order to complete the following goal: {self.goal}. Review the plan and provide constructive feedback. If the plan is sufficient, end your review with the exact phrase "APPROVED"."""
+                f"""You critique the plans of the planning agent. The planning agent is creating a plan for sub-agents in order to complete the following goal: {self.goal}. Review the plan and provide constructive feedback. If the plan is sufficient, end your review with the exact phrase "APPROVED". Critical: A synth agent is automatically added, do not critique if it does not exist. Critical"""
             )
         )
 
@@ -59,24 +61,22 @@ class DYNAMO:
     def run(self):
         current_plan = self.planner.ask(f"Create the initial plan for our goal.")
         print(current_plan)
-        time.sleep(10)
         for _ in range(3):
             plan_critique_hand_back = self.plan_critique.ask(f"Critique this plan. Find any flaws: {current_plan}")
-            time.sleep(10)
 
             print(plan_critique_hand_back)
 
             if "APPROVED" in plan_critique_hand_back:
                 break
             current_plan = self.planner.ask(f"Based on this feedback, generate a better plan. {plan_critique_hand_back}")
-            time.sleep(10)
 
             print(current_plan)
 
 
         grading_rubric=self.rubric.ask(f"Here is the plan you have to create a rubic for. {current_plan}")
         plan_json = self.manager.ask(f"Here is the approved plan: {current_plan}. Define the sub-agents and their tasks. Turn this into JSON please.")
-        time.sleep(10)
+        print(grading_rubric)
+    
 
 
         spwan_agents=self.load_json(plan_json).get("agents", [])
@@ -90,18 +90,19 @@ class DYNAMO:
                 iterations += 1
                 sub_agent_results = []
                 for i in spwan_agents:
-                    worker = Agent(i["name"], self.provider, i["role_prompt"])
+                    worker = Agent(i["name"], self.provider, i["role_prompt"], 
+               tools=self.tools, tool_executor=self.tool_executor)
                     result = worker.ask(f"Task: {i['task']}. Here is the output from other agents: {sub_agent_results} (If there's none your the first agent.)")
-                    time.sleep(5)
+                    
+                    print(result)
+
 
                     sub_agent_results.append(f"--- Output from {i['name']} ---\n{result}")
                 final_draft = self.synth.ask(f"Compile these results into a single final result. {sub_agent_results}")
-                time.sleep(10)
 
                 print(f"FINAL DRAFT BEFORE CRITIQUE: {final_draft} ")
 
                 critique = self.work_critique.ask(f"Critique the agents, and the final output. This is the rubric {grading_rubric} Sub agent results: {sub_agent_results}, final result: {final_draft}")
-                time.sleep(10)
 
                 critique_data = self.load_json(critique)   
                 score = critique_data.get("score", 0)
