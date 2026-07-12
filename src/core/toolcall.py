@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ddgs import DDGS
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 
-
+ 
+from typing import Optional
+ 
 class Tool(ABC):
     name: str
     description: str
@@ -300,3 +302,238 @@ class ScreenshotTool(Tool):
 
         except Exception as e:
             return f"Screenshot failed: {e}"
+        
+
+
+
+
+
+
+
+class BrowserTool(Tool):
+
+ 
+    name = "browser_use"
+    description = (
+        "Control a real web browser. Use this to navigate to pages, click "
+        "elements, type into fields, read visible text, list links, scroll, "
+        "go back, or take a screenshot of the current page. Always start "
+        "with action='goto' to load a URL. Elements are targeted with CSS "
+        "selectors (e.g. 'button#submit', 'a.nav-link', 'input[name=q]')."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": [
+                    "goto",
+                    "click",
+                    "type",
+                    "press",
+                    "extract_text",
+                    "extract_links",
+                    "scroll",
+                    "go_back",
+                    "go_forward",
+                    "screenshot",
+                    "current_url",
+                    "close",
+                ],
+                "description": "Which browser action to perform.",
+            },
+            "url": {
+                "type": "string",
+                "description": "URL to navigate to. Required for 'goto'.",
+            },
+            "selector": {
+                "type": "string",
+                "description": (
+                    "CSS selector of the target element. Required for "
+                    "'click' and 'type'. Optional for 'extract_text' "
+                    "(scopes extraction to that element)."
+                ),
+            },
+            "text": {
+                "type": "string",
+                "description": "Text to type. Required for 'type'.",
+            },
+            "key": {
+                "type": "string",
+                "description": "Keyboard key to press, e.g. 'Enter', 'Tab'. Required for 'press'.",
+            },
+            "direction": {
+                "type": "string",
+                "enum": ["down", "up"],
+                "description": "Scroll direction. Used with 'scroll' (default: down).",
+            },
+            "save_path": {
+                "type": "string",
+                "description": "Optional path to save a screenshot PNG to disk.",
+            },
+            "timeout_ms": {
+                "type": "integer",
+                "description": "Max time to wait for an action/selector, in ms (default 15000).",
+            },
+        },
+        "required": ["action"],
+    }
+ 
+    # Actions that change state (navigate, click, submit, type) rather than
+    # just read the current page. These are the ones gated by `confirm`.
+    CONSEQUENTIAL_ACTIONS = {"goto", "click", "type", "press"}
+ 
+    def __init__(
+        self,
+        headless: bool = True,
+        viewport: Optional[dict] = None,
+        confirm: Optional[Callable[[dict], bool]] = None,
+    ):
+        """
+        confirm: optional callback that receives a dict describing the
+        pending action (e.g. {"action": "click", "selector": "#buy-now"})
+        and returns True/False for whether to proceed. Only called for
+        CONSEQUENTIAL_ACTIONS -- read-only actions like extract_text or
+        screenshot always run without asking.
+ 
+        If confirm is None (default), consequential actions run
+        automatically with no gate. Pass a callback if you want a human
+        (or a policy check) in the loop before the agent clicks/types/
+        navigates.
+        """
+        self.headless = headless
+        self.viewport = viewport or {"width": 1280, "height": 800}
+        self.confirm = confirm
+        self._playwright: Optional[Playwright] = None
+        self._browser: Optional[Browser] = None
+        self._page: Optional[Page] = None
+ 
+    def _ask_permission(self, action_info: dict) -> bool:
+        if self.confirm is None:
+            return True
+        try:
+            return bool(self.confirm(action_info))
+        except Exception:
+            return False
+ 
+    # -- lifecycle -----------------------------------------------------
+ 
+    def _ensure_started(self):
+        if self._page is not None:
+            return
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(headless=self.headless)
+        self._page = self._browser.new_page(viewport=self.viewport)
+ 
+    def close(self):
+        try:
+            if self._browser is not None:
+                self._browser.close()
+        finally:
+            if self._playwright is not None:
+                self._playwright.stop()
+            self._browser = None
+            self._page = None
+            self._playwright = None
+ 
+    # -- main entrypoint -------------------------------------------------
+ 
+    def run(
+        self,
+        action: str,
+        url: str | None = None,
+        selector: str | None = None,
+        text: str | None = None,
+        key: str | None = None,
+        direction: str = "down",
+        save_path: str | None = None,
+        timeout_ms: int = 15000,
+    ) -> str:
+        try:
+            if action == "close":
+                self.close()
+                return "Browser closed."
+ 
+            if action in self.CONSEQUENTIAL_ACTIONS:
+                info = {"action": action, "url": url, "selector": selector, "text": text, "key": key}
+                info = {k: v for k, v in info.items() if v is not None}
+                if not self._ask_permission(info):
+                    return "The user refused to run this browser action."
+ 
+            self._ensure_started()
+            page = self._page
+ 
+            if action == "goto":
+                if not url:
+                    return "Error: 'url' is required for action='goto'."
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                title = page.title()
+                return f"Loaded {page.url}\nTitle: {title}"
+ 
+            if action == "click":
+                if not selector:
+                    return "Error: 'selector' is required for action='click'."
+                page.click(selector, timeout=timeout_ms)
+                return f"Clicked '{selector}'. Current URL: {page.url}"
+ 
+            if action == "type":
+                if not selector or text is None:
+                    return "Error: 'selector' and 'text' are required for action='type'."
+                page.fill(selector, text, timeout=timeout_ms)
+                return f"Typed into '{selector}'."
+ 
+            if action == "press":
+                if not key:
+                    return "Error: 'key' is required for action='press'."
+                target = selector if selector else "body"
+                page.press(target, key, timeout=timeout_ms)
+                return f"Pressed '{key}' on '{target}'."
+ 
+            if action == "extract_text":
+                if selector:
+                    el = page.query_selector(selector)
+                    if el is None:
+                        return f"No element found for selector '{selector}'."
+                    return el.inner_text()
+                return page.inner_text("body")
+ 
+            if action == "extract_links":
+                links = page.eval_on_selector_all(
+                    "a[href]",
+                    "els => els.map(e => ({text: e.innerText.trim(), href: e.href}))",
+                )
+                if not links:
+                    return "No links found."
+                return "\n".join(
+                    f"{l['text'] or '(no text)'} -> {l['href']}" for l in links[:200]
+                )
+ 
+            if action == "scroll":
+                delta = 1000 if direction == "down" else -1000
+                page.mouse.wheel(0, delta)
+                return f"Scrolled {direction}."
+ 
+            if action == "go_back":
+                page.go_back(timeout=timeout_ms)
+                return f"Went back. Current URL: {page.url}"
+ 
+            if action == "go_forward":
+                page.go_forward(timeout=timeout_ms)
+                return f"Went forward. Current URL: {page.url}"
+ 
+            if action == "current_url":
+                return page.url
+ 
+            if action == "screenshot":
+                img_bytes = page.screenshot(full_page=True)
+                if save_path:
+                    with open(save_path, "wb") as f:
+                        f.write(img_bytes)
+                    return f"Screenshot saved to '{save_path}' ({len(img_bytes)} bytes)"
+                b64 = base64.b64encode(img_bytes).decode()
+                return f"data:image/png;base64,{b64}"
+ 
+            return f"Unknown action: {action}"
+ 
+        except Exception as e:
+            return f"Browser action '{action}' failed: {e}"
